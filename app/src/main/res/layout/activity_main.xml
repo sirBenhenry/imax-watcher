@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#101014">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="The Odyssey · IMAX 70mm"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Cineplex Cinemas Vaughan · watching to Aug 4"
+            android:textColor="#8A8A99"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="#1B1B22"
+            android:padding="14dp"
+            android:text="Not started yet"
+            android:textColor="#E6E6F0"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/toggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Start watching" />
+
+        <Button
+            android:id="@+id/checkNow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Check once now" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="SETTINGS"
+            android:textColor="#8A8A99"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Check every"
+            android:textColor="#E6E6F0" />
+
+        <Spinner
+            android:id="@+id/interval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Alert from row"
+            android:textColor="#E6E6F0" />
+
+        <Spinner
+            android:id="@+id/minRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Screenings to watch"
+            android:textColor="#E6E6F0" />
+
+        <CheckBox
+            android:id="@+id/t11"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="11:00"
+            android:textColor="#E6E6F0" />
+
+        <CheckBox
+            android:id="@+id/t15"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="15:00"
+            android:textColor="#E6E6F0" />
+
+        <CheckBox
+            android:id="@+id/t19"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="19:00"
+            android:textColor="#E6E6F0" />
+
+        <CheckBox
+            android:id="@+id/t23"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="23:00"
+            android:textColor="#E6E6F0" />
+
+        <Button
+            android:id="@+id/battery"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Disable battery optimisation" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="LAST SCAN"
+            android:textColor="#8A8A99"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/report"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="24dp"
+            android:background="#1B1B22"
+            android:fontFamily="monospace"
+            android:padding="12dp"
+            android:text="—"
+            android:textColor="#B9B9C6"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>

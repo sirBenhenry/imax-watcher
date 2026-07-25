@@ -1,0 +1,16 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+
+# Machine-specific SDK path
+local.properties
+
+# Built artifacts are attached to GitHub Releases, not committed
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store

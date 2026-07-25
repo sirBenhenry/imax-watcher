@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A stylised cinema seat, sized to the 72dp safe zone of a 108dp adaptive icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#C8963E"
+        android:pathData="M36,40 h36 a5,5 0 0 1 5,5 v22 h-46 v-22 a5,5 0 0 1 5,-5 z" />
+    <path
+        android:fillColor="#8A6A2C"
+        android:pathData="M28,50 a4,4 0 0 1 4,4 v16 h-8 v-16 a4,4 0 0 1 4,-4 z" />
+    <path
+        android:fillColor="#8A6A2C"
+        android:pathData="M80,50 a4,4 0 0 1 4,4 v16 h-8 v-16 a4,4 0 0 1 4,-4 z" />
+    <path
+        android:fillColor="#E0B25A"
+        android:pathData="M31,68 h46 v6 h-46 z" />
+</vector>
