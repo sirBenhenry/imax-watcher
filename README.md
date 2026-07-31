@@ -1,105 +1,121 @@
 # Odyssey Watch
 
-An Android app that watches for a decent seat opening up for **The Odyssey in IMAX 70mm
-at Cineplex Cinemas Vaughan**, and notifies you the moment one does with a link straight
-into that screening's booking page.
+An Android app that watches Cineplex for seats that are actually worth booking, and
+notifies you the moment one appears with a link straight into that screening's checkout.
 
-Built for a fixed window: **24 Jul – 4 Aug 2026**.
+Built originally to get a non-front-row IMAX 70mm seat for *The Odyssey*; now it works for
+**any film, at any Cineplex cinema in Canada, at any point in the bookable future**.
 
-## What it actually watches
+## What it does
 
-| Setting | Value |
-| --- | --- |
-| Theatre | Cineplex Cinemas Vaughan (`theatreId 7408`), 3555 Highway 7 West |
-| Movie | The Odyssey |
-| Format | IMAX 70mm only (`experienceTypes` contains `70mm`) |
-| Screenings | 11:00 and 15:00 daily (19:00 / 23:00 togglable in-app) |
-| Rows | C and further back — rows A and B are ignored |
-| Seat types | `Standard` only |
-| Alert threshold | 1 seat |
+- Pick **any film** from Cineplex's catalogue (~250 titles, running roughly 18 months
+  ahead — *Dune: Part 3* and 2027 releases are already selectable).
+- Pick **any set of cinemas**, browsable and searchable, grouped by province. One tap
+  selects all 8 IMAX 70mm venues.
+- Filter by **format** (IMAX 70mm, IMAX, UltraAVX, D-BOX, …), **row**, **time of day**,
+  and **how far ahead** to look.
+- Alerts on a matching seat opening up, **and** on a film going on sale for the first
+  time at a cinema you're watching.
+- Runs indefinitely — no hardcoded end date.
 
-### Why wheelchair and companion seats are excluded
+## Cinemas with IMAX 70mm
 
-The IMAX house at Vaughan has 8 accessibility seats in row E — `EW1–EW4` (Wheelchair) and
-`EC1/EC4/EC21/EC24` (Companion). These report `Available` in **almost every screening**,
-including ones that are otherwise sold out, because they're held back for accessibility
-booking. Without a `type == "Standard"` filter the app would fire an alert on essentially
-every poll, forever. This is the single most important filter in the whole thing.
+Found by sweeping all ~150 Cineplex theatres for a `70mm` experience:
 
-### Row geometry
+| Theatre | City | ID |
+| --- | --- | --- |
+| Scotiabank Theatre Chinook | Calgary, AB | 3401 |
+| Scotiabank Theatre Edmonton | Edmonton, AB | 3403 |
+| Cineplex Cinemas Langley | Langley, BC | 1405 |
+| SilverCity Riverport | Richmond, BC | 1409 |
+| Scotiabank Theatre Halifax | Halifax, NS | 5130 |
+| Cineplex Mississauga Square One | Mississauga, ON | 7420 |
+| Cineplex Cinemas Vaughan | Vaughan, ON | 7408 |
+| Cinéma Banque Scotia Montréal | Montréal, QC | 9406 |
 
-The auditorium is 10 lettered rows, **A at the front** through **J at the back** (plus two
-zero-seat spacer rows). Seat IDs are `1_<physicalRow>_<physicalColumn>` where the physical
-row number runs *backwards* from the label — row A is physical 12, row J is physical 1.
-The app keys off the row `label` from the layout payload, never off the seat ID, so this
-inversion doesn't matter.
+Three further houses run standard (non-IMAX) 70mm: International Village Vancouver,
+Queensway and Varsity in Toronto. Canada's ninth IMAX 70mm screen, Toronto's Cinesphere,
+is not a Cineplex venue and so isn't reachable through this API.
+
+### Why Canada only
+
+There are 41 true IMAX 70mm screens worldwide: 25 in the US, 9 in Canada, 3 in the UK and
+one each in Australia, Belgium, Czechia and France. Only the Canadian ones are Cineplex.
+The rest sit behind AMC, Regal, Cinemark, ODEON and various science museums — a different
+ticketing backend each, and AMC already answers a plain request with `403`. Supporting
+them is not an extension of this work but a separate reverse-engineering project per
+chain, so this app is deliberately scoped to the one API that is fully solved.
+
+## Seat filtering
+
+The auditorium at Vaughan is 10 lettered rows, **A at the front** through **J at the
+back**. Seat IDs are `1_<physicalRow>_<physicalColumn>` where the physical row number runs
+*backwards* from the label (row A is physical 12). The app keys off the row `label`, never
+the ID, so that inversion is irrelevant.
+
+**Wheelchair and companion seats are always excluded.** At Vaughan the eight accessibility
+seats in row E (`EW1–EW4`, `EC1/EC4/EC21/EC24`) report `Available` in almost every
+screening — including sold-out ones — because they're held back for accessibility booking.
+Without a `type == "Standard"` filter the app would fire an alert on every single poll.
+This is the single most important filter in the whole thing.
 
 ## The Cineplex API
 
-All of this is the same undocumented API that cineplex.com's own web front-end calls.
-No login is involved and only public showtime/seat data is read. The subscription key is
-the public one shipped in their JavaScript bundle.
+The same undocumented API cineplex.com's own front-end calls. No login; only public
+catalogue, showtime and seat data is read. The subscription key is the public one shipped
+in their JavaScript bundle.
 
 ```
 Header: Ocp-Apim-Subscription-Key: dcdac5601d864addbc2675a2e96cb1f8
+Base:   https://apis.cineplex.com/prod/cpx/theatrical/api
+Tickets:https://apis.cineplex.com/prod/ticketing/api
 ```
 
-**Showtimes** — cheap, and already includes `seatsRemaining`:
+| Purpose | Endpoint |
+| --- | --- |
+| All theatres | `GET /v1/theatres?language=en&skip=0&take=1000` |
+| Film catalogue | `GET /v1/movies?language=en&take=500&showtimeStatus=0` |
+| **Bookable dates for a film at a cinema** | `GET /v1/dates/bookable?language=en&locationId={t}&filmId={f}` |
+| Showtimes | `GET /v1/showtimes?language=en&locationId={t}&date=YYYY-MM-DD` |
+| Seat layout | `GET {tickets}/v1/theatre/{t}/showtime/{s}/seat-layout` |
+| Seat availability | `GET {tickets}/v1/theatre/{t}/showtime/{s}/seat-availability` |
+| Booking deeplink | `…/deeplink?s={session}&a=0000000001&l={t}&m={slug}&ss=False` |
 
-```
-GET https://apis.cineplex.com/prod/cpx/theatrical/api/v1/showtimes
-      ?language=en&locationId=7408&date=2026-07-26
-```
+Quirks worth knowing, all handled in `CineplexApi.kt`:
 
-Returns `dates[] → movies[] → experiences[] → sessions[]`. Each session carries
-`vistaSessionId`, `showStartDateTime` (local theatre time), `seatsRemaining`, `isSoldOut`,
-`auditorium`, and `deeplinkUrl`.
-
-Note: the response is sometimes a bare object and sometimes a single-element array;
-`experienceTypes` is sometimes a string and sometimes an array. The parser handles both.
-
-**Seat layout** — static per session, so it's cached on disk (~60 KB, the largest payload):
-
-```
-GET https://apis.cineplex.com/prod/ticketing/api/v1/theatre/7408/showtime/{id}/seat-layout
-```
-
-**Seat availability** — the live bit, ~7 KB:
-
-```
-GET https://apis.cineplex.com/prod/ticketing/api/v1/theatre/7408/showtime/{id}/seat-availability
-```
-
-Returns `seatAvailabilities: { "<seatId>": "Available" | "Occupied" | "Broken" }`.
-
-**Booking deeplink** — 302s to the movie page with the ticketing flow already opened on the
-right session:
-
-```
-https://apis.cineplex.com/prod/cpx/theatrical/deeplink?s={sessionId}&a=0000000001&l=7408&m=the-odyssey&ss=False
-```
+- `/v1/showtimes` returns a bare object *or* a single-element array.
+- `experienceTypes` is sometimes a string, sometimes an array of strings.
+- Responses are **intermittently gzipped even when not requested**, so the client sniffs
+  the `1f 8b` magic bytes rather than trusting `Content-Encoding`.
+- There is no film-wide showtimes query; `locationId` is mandatory, so each cinema costs
+  a request.
 
 ## Polling strategy
 
-Two-stage, to stay light on Cineplex's servers and on your battery:
+`dates/bookable` is the pivot the whole loop is built on — one request per (cinema, film)
+says exactly which dates exist, instead of blindly sweeping a year of calendar.
 
-1. One cheap showtimes call per date (12 calls) gives `seatsRemaining` for every session.
-2. The expensive seat-map pair is only fetched for sessions whose seat count **moved**
-   since the last poll.
-3. Every 4th cycle does a **full sweep** regardless, so a swap that leaves the count
-   unchanged (someone frees E12 while someone takes A3) can't hide indefinitely.
+1. One `bookableDates` call per cinema. Empty means not on sale yet: cheap, and it doubles
+   as the trigger for the on-sale alert.
+2. Showtimes fetched only for those dates, and only inside the configured window.
+3. Seat maps fetched only when a session's `seatsRemaining` actually moved, with a full
+   sweep every 4th cycle so a same-count swap (one person frees E12 as another takes A3)
+   can't hide indefinitely.
+4. (cinema, date) pairs are budgeted at 60 per cycle and rotated, so a wide-open window
+   degrades into slower coverage rather than hundreds of requests every 15 minutes.
 
-Steady state is ~12 requests per cycle instead of ~60.
+Seat layouts are cached on disk permanently — they never change for a given session and
+are by far the largest payload.
 
-Alerts are de-duplicated per session: you're notified about a seat once, and only again if
-it goes away and comes back.
+Alerts de-duplicate per session: you're told about a seat once, and again only if it goes
+away and comes back.
 
 ## Running it
 
-The watcher is a **foreground service** with a persistent silent notification, not
-WorkManager — periodic work gets batched and deferred under Doze, which is the wrong
-tradeoff when a seat may only exist for a few minutes. It targets SDK 34 deliberately:
-apps targeting Android 15+ get a 6-hour/day cap on `dataSync` foreground services.
+A **foreground service** with a persistent silent notification, not WorkManager — periodic
+work gets batched and deferred under Doze, the wrong tradeoff when a seat may exist for
+only minutes. Targets SDK 34 deliberately: apps targeting Android 15+ get a 6-hour/day cap
+on `dataSync` foreground services.
 
 ### Install
 
@@ -107,27 +123,27 @@ apps targeting Android 15+ get a 6-hour/day cap on `dataSync` foreground service
 adb install -r OdysseyWatch.apk
 ```
 
-Or copy `OdysseyWatch.apk` to the phone and open it (allow "install unknown apps").
+Or copy the APK to the phone and open it (allow "install unknown apps").
 
-### After installing
+### First run
 
-1. Open the app, allow notifications.
-2. Tap **Disable battery optimisation** and confirm — without this Android will eventually
-   throttle the polling.
-3. Tap **Check once now** to confirm it works; the last-scan panel fills in.
-4. Tap **Start watching**.
+1. Allow notifications.
+2. **Disable battery optimisation** — required, or Android throttles the polling.
+3. **Choose film**, then **Choose cinemas** (the *IMAX 70mm* button selects all 8).
+4. Set format, row, time range and how far ahead to look.
+5. **Check once now** to confirm, then **Start watching**.
 
-Leave the persistent "Watching IMAX 70mm seats" notification alone — dismissing it stops
-the service.
+Don't dismiss the ongoing notification — that stops the service. On Samsung, Xiaomi,
+OnePlus, Oppo and Huawei you must also exempt the app from the manufacturer's own
+background killer, which is separate from Android's.
 
-## Building from source
+## Building
 
-Requires JDK 17+ and an Android SDK with platform 34. `local.properties` must point at the
-SDK.
+Requires JDK 17+ and an Android SDK with platform 34; `local.properties` must point at it.
 
 ```
 gradle assembleRelease
 ```
 
-Output: `app/build/outputs/apk/release/app-release.apk`, signed with the debug key so it
-can be sideloaded directly.
+Output `app/build/outputs/apk/release/app-release.apk`, signed with the debug key for
+direct sideloading.

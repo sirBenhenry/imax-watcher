@@ -2,8 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="#101014">
+    android:background="#101014"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="The Odyssey · IMAX 70mm"
+            android:text="Odyssey Watch"
             android:textColor="#FFFFFF"
             android:textSize="22sp"
             android:textStyle="bold" />
@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="Cineplex Cinemas Vaughan · watching to Aug 4"
+            android:text="Cineplex seat watcher"
             android:textColor="#8A8A99"
             android:textSize="13sp" />
 
@@ -52,75 +52,127 @@
             android:layout_marginTop="6dp"
             android:text="Check once now" />
 
+        <!-- ============================ WHAT ============================ -->
         <TextView
+            style="@style/SectionLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="SETTINGS"
-            android:textColor="#8A8A99"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:text="WHAT TO WATCH" />
+
+        <Button
+            android:id="@+id/pickFilm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Choose film" />
 
         <TextView
+            android:id="@+id/filmLabel"
+            style="@style/ValueLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Check every"
-            android:textColor="#E6E6F0" />
+            android:text="No film selected" />
+
+        <Button
+            android:id="@+id/pickTheatres"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Choose cinemas" />
+
+        <TextView
+            android:id="@+id/theatreLabel"
+            style="@style/ValueLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No cinemas selected" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Format" />
 
         <Spinner
-            android:id="@+id/interval"
+            android:id="@+id/experience"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <!-- ============================ FILTERS ============================ -->
+        <TextView
+            style="@style/SectionLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
+            android:text="FILTERS" />
 
         <TextView
+            style="@style/FieldLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Alert from row"
-            android:textColor="#E6E6F0" />
+            android:text="Alert from row" />
 
         <Spinner
             android:id="@+id/minRow"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" />
+            android:layout_height="wrap_content" />
 
         <TextView
+            style="@style/FieldLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Screenings to watch"
-            android:textColor="#E6E6F0" />
+            android:text="Earliest start time" />
+
+        <Spinner
+            android:id="@+id/earliest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Latest start time" />
+
+        <Spinner
+            android:id="@+id/latest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="How far ahead to look" />
+
+        <Spinner
+            android:id="@+id/window"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
         <CheckBox
-            android:id="@+id/t11"
-            android:layout_width="wrap_content"
+            android:id="@+id/notifyOnSale"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="11:00"
+            android:layout_marginTop="10dp"
+            android:text="Alert when tickets first go on sale"
             android:textColor="#E6E6F0" />
 
-        <CheckBox
-            android:id="@+id/t15"
-            android:layout_width="wrap_content"
+        <!-- ============================ RUNTIME ============================ -->
+        <TextView
+            style="@style/SectionLabel"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="15:00"
-            android:textColor="#E6E6F0" />
+            android:text="RUNTIME" />
 
-        <CheckBox
-            android:id="@+id/t19"
-            android:layout_width="wrap_content"
+        <TextView
+            style="@style/FieldLabel"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="19:00"
-            android:textColor="#E6E6F0" />
+            android:text="Check every" />
 
-        <CheckBox
-            android:id="@+id/t23"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="23:00"
-            android:textColor="#E6E6F0" />
+        <Spinner
+            android:id="@+id/interval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
         <Button
             android:id="@+id/battery"
@@ -130,13 +182,10 @@
             android:text="Disable battery optimisation" />
 
         <TextView
+            style="@style/SectionLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="LAST SCAN"
-            android:textColor="#8A8A99"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:text="LAST SCAN" />
 
         <TextView
             android:id="@+id/report"

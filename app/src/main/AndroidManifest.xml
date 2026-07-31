@@ -28,6 +28,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".PickerActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
         <service
             android:name=".WatchService"
             android:exported="false"

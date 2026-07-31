@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.OdysseyWatch" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!--
+      Deliberately NOT DayNight. v1 used Theme.AppCompat.DayNight with a hardcoded dark
+      windowBackground, so on a phone in light mode the theme handed out dark text
+      colours to draw on top of a dark background — spinners and dropdowns rendered
+      effectively invisible. Pinning the dark theme keeps text and background in sync.
+    -->
+    <style name="Theme.OdysseyWatch" parent="Theme.AppCompat.NoActionBar">
         <item name="colorPrimary">#C8963E</item>
+        <item name="colorPrimaryDark">#0B0B0E</item>
         <item name="colorAccent">#C8963E</item>
         <item name="android:windowBackground">#101014</item>
+        <item name="android:textColorPrimary">#F2F2F7</item>
+        <item name="android:textColorSecondary">#A8A8B8</item>
+        <item name="android:textColorHint">#6E6E80</item>
+        <item name="android:colorBackground">#101014</item>
     </style>
 </resources>

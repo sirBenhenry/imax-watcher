@@ -140,14 +140,13 @@ class WatchService : Service() {
             val result = Watcher(this).scan()
             val stamp = SimpleDateFormat("HH:mm", Locale.CANADA).format(Date())
 
-            for (hit in result.hits) {
-                Notifier.seatAlert(this, hit)
-            }
+            for (hit in result.onSaleHits) Notifier.onSaleAlert(this, hit)
+            for (hit in result.seatHits) Notifier.seatAlert(this, hit)
 
-            val goodTotal = result.hits.sumOf { it.newSeats.size }
+            val goodTotal = result.seatHits.sumOf { it.newSeats.size }
             val status = when {
-                result.error != null -> "Last check $stamp — error: ${result.error}"
                 goodTotal > 0 -> "Last check $stamp — $goodTotal new seat(s) found!"
+                result.onSaleHits.isNotEmpty() -> "Last check $stamp — tickets went on sale!"
                 else -> "Last check $stamp — nothing yet (${result.sessionsChecked} screenings)"
             }
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="SectionLabel">
+        <item name="android:layout_marginTop">22dp</item>
+        <item name="android:textColor">#C8963E</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="FieldLabel">
+        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:textColor">#E6E6F0</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <style name="ValueLabel">
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:textColor">#8A8A99</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+</resources>
