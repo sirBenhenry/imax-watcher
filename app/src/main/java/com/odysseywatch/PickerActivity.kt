@@ -45,6 +45,7 @@ class PickerActivity : AppCompatActivity() {
     private var rows = listOf<Row>()
     private var visible = listOf<Row>()
     private val selected = linkedSetOf<Int>()
+    private var includeComingSoon = false
 
     /** A list entry: either a province header or a selectable item. */
     private sealed class Row {
@@ -78,6 +79,14 @@ class PickerActivity : AppCompatActivity() {
         } else {
             b.title.text = "Choose a film"
             b.search.hint = "Search films"
+            b.actions.visibility = View.VISIBLE
+            b.clear.visibility = View.GONE
+            b.preset70.text = "+ Coming soon"
+            b.preset70.setOnClickListener {
+                includeComingSoon = !includeComingSoon
+                b.preset70.text = if (includeComingSoon) "Bookable only" else "+ Coming soon"
+                load()
+            }
         }
 
         b.list.adapter = adapter
@@ -132,9 +141,13 @@ class PickerActivity : AppCompatActivity() {
                         prefs.cachedTheatres = encodeTheatres(list)
                         buildTheatreRows(list)
                     } else {
-                        val list = CineplexApi.movies()
-                        prefs.cachedMovies = encodeMovies(list)
-                        buildMovieRows(list)
+                        val bookable = CineplexApi.bookableMovies(prefs.theatreIds)
+                        val soon = if (includeComingSoon) {
+                            val have = bookable.map { it.id }.toSet()
+                            CineplexApi.comingSoonMovies().filter { it.id !in have }
+                        } else emptyList()
+                        prefs.cachedMovies = encodeMovies(bookable + soon)
+                        buildMovieRows(bookable, soon)
                     }
                 }
             }
@@ -143,7 +156,8 @@ class PickerActivity : AppCompatActivity() {
                 // Fall back to whatever was cached so the picker still works offline.
                 val cached = if (mode == MODE_THEATRE)
                     buildTheatreRows(decodeTheatres(prefs.cachedTheatres))
-                else buildMovieRows(decodeMovies(prefs.cachedMovies))
+                else decodeMovies(prefs.cachedMovies).partition { !it.isComingSoon }
+                    .let { (a, c) -> buildMovieRows(a, c) }
                 if (cached.isEmpty()) {
                     b.empty.text = "Couldn't load: ${it.message}"
                     return@launch
@@ -170,8 +184,18 @@ class PickerActivity : AppCompatActivity() {
         return out
     }
 
-    private fun buildMovieRows(list: List<Movie>): List<Row> =
-        list.map { Row.Item(it.id, it.name, it.releaseDate.ifBlank { "—" }) }
+    private fun buildMovieRows(bookable: List<Movie>, soon: List<Movie>): List<Row> {
+        val out = mutableListOf<Row>()
+        if (bookable.isNotEmpty()) {
+            out.add(Row.Header("BOOKABLE NOW · ${bookable.size}"))
+            bookable.forEach { out.add(Row.Item(it.id, it.name, it.releaseDate.ifBlank { "—" })) }
+        }
+        if (soon.isNotEmpty()) {
+            out.add(Row.Header("COMING SOON — not on sale yet · ${soon.size}"))
+            soon.forEach { out.add(Row.Item(it.id, it.name, it.releaseDate.ifBlank { "—" })) }
+        }
+        return out
+    }
 
     private fun applyFilter(q: String) {
         val query = q.trim().lowercase()

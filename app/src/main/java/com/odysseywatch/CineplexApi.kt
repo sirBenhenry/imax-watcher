@@ -19,7 +19,8 @@ data class Movie(
     val id: Int,
     val name: String,
     val releaseDate: String,   // yyyy-MM-dd, may be blank
-    val posterUrl: String
+    val posterUrl: String,
+    val isComingSoon: Boolean = false
 )
 
 data class Session(
@@ -115,13 +116,8 @@ object CineplexApi {
         return out.values.sortedWith(compareBy({ it.province }, { it.city }, { it.name }))
     }
 
-    /**
-     * The whole browsable catalogue — currently ~253 titles running about 18 months
-     * ahead, so films like Dune: Part 3 are selectable long before release.
-     */
-    fun movies(): List<Movie> {
-        val root = JSONObject(get("$CPX/v1/movies?language=en&skip=0&take=500&showtimeStatus=0"))
-        val arr = root.optJSONArray("items") ?: return emptyList()
+    private fun parseMovies(arr: JSONArray?): List<Movie> {
+        if (arr == null) return emptyList()
         val out = mutableListOf<Movie>()
         for (i in 0 until arr.length()) {
             val m = arr.getJSONObject(i)
@@ -133,11 +129,49 @@ object CineplexApi {
                     id = id,
                     name = m.optString("name"),
                     releaseDate = if (rel.length >= 10) rel.substring(0, 10) else "",
-                    posterUrl = m.optString("smallPosterImageUrl")
+                    posterUrl = m.optString("smallPosterImageUrl"),
+                    isComingSoon = m.optBoolean("isComingSoon", false)
                 )
             )
         }
         return out.sortedBy { it.name.lowercase() }
+    }
+
+    /**
+     * Films you can actually buy a ticket for.
+     *
+     * The raw catalogue (`/v1/movies`) is ~250 titles and includes a long tail with no
+     * showtimes anywhere, which made the picker read as full of films that aren't
+     * playing. `/v1/movies/bookable` is the honest list: ~86 nationally, and narrower
+     * still per cinema. Note `hasShowtimes` on the raw catalogue is NOT a usable
+     * substitute — Dune: Part 3 reports false while genuinely being bookable.
+     *
+     * When cinemas are selected we union their per-cinema lists, so the picker only
+     * offers films you could actually see at one of your venues.
+     */
+    fun bookableMovies(theatreIds: List<Int>): List<Movie> {
+        val out = LinkedHashMap<Int, Movie>()
+        // Beyond a handful of cinemas the per-venue fan-out costs more than it's worth.
+        if (theatreIds.isEmpty() || theatreIds.size > 12) {
+            parseMovies(JSONArray(get("$CPX/v1/movies/bookable?language=en"))).forEach { out[it.id] = it }
+        } else {
+            for (t in theatreIds) {
+                runCatching {
+                    parseMovies(JSONArray(get("$CPX/v1/movies/bookable?language=en&locationId=$t")))
+                }.getOrDefault(emptyList()).forEach { out[it.id] = it }
+            }
+        }
+        return out.values.sortedBy { it.name.lowercase() }
+    }
+
+    /**
+     * Announced films with no showtimes on sale anywhere yet. Offered behind a toggle so
+     * a watch can be armed in advance — the on-sale alert is the whole point for a film
+     * that is still months out.
+     */
+    fun comingSoonMovies(): List<Movie> {
+        val root = JSONObject(get("$CPX/v1/movies?language=en&skip=0&take=500&showtimeStatus=0"))
+        return parseMovies(root.optJSONArray("items")).filter { it.isComingSoon }
     }
 
     /**

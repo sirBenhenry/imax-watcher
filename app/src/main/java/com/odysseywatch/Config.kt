@@ -176,6 +176,7 @@ fun encodeMovies(list: List<Movie>): String {
             org.json.JSONObject()
                 .put("id", it.id).put("name", it.name)
                 .put("releaseDate", it.releaseDate).put("posterUrl", it.posterUrl)
+                .put("isComingSoon", it.isComingSoon)
         )
     }
     return a.toString()
@@ -185,6 +186,9 @@ fun decodeMovies(s: String): List<Movie> = runCatching {
     val a = JSONArray(s)
     (0 until a.length()).map {
         val o = a.getJSONObject(it)
-        Movie(o.optInt("id"), o.optString("name"), o.optString("releaseDate"), o.optString("posterUrl"))
+        Movie(
+            o.optInt("id"), o.optString("name"), o.optString("releaseDate"),
+            o.optString("posterUrl"), o.optBoolean("isComingSoon", false)
+        )
     }
 }.getOrDefault(emptyList())
