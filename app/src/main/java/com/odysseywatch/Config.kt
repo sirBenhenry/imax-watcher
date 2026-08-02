@@ -176,6 +176,27 @@ class Prefs(ctx: Context) {
     fun seatsRemaining(sessionId: Long): Int = sp.getInt("sr_$sessionId", -1)
     fun setSeatsRemaining(sessionId: Long, n: Int) = sp.edit().putInt("sr_$sessionId", n).apply()
 
+    /**
+     * Matching seat labels last seen for a session, so a quick pass can report a
+     * screening without refetching its seat map.
+     *
+     * null means "never looked", which is deliberately distinct from an empty list
+     * meaning "looked, nothing matched". Reporting the first as the second is what made
+     * the list claim "none matching" on screenings whose seat map was full of them.
+     */
+    fun cachedGoodSeats(sessionId: Long): List<String>? {
+        val raw = sp.getString("gs_$sessionId", null) ?: return null
+        return if (raw.isEmpty()) emptyList() else raw.split(",")
+    }
+
+    fun setCachedGoodSeats(sessionId: Long, seats: List<String>) =
+        sp.edit().putString("gs_$sessionId", seats.joinToString(",")).apply()
+
+    /** The row filter the cached seat data was computed with. */
+    var cachedMinRow: String
+        get() = sp.getString("cache_min_row", "") ?: ""
+        set(v) = sp.edit().putString("cache_min_row", v).apply()
+
     fun alerted(sessionId: Long): Set<String> = sp.getStringSet("al_$sessionId", emptySet()) ?: emptySet()
     fun setAlerted(sessionId: Long, seats: Set<String>) = sp.edit().putStringSet("al_$sessionId", seats).apply()
 
@@ -188,7 +209,8 @@ class Prefs(ctx: Context) {
     /** Dropped whenever the watch target changes, so stale alerts never carry over. */
     fun clearWatchState() {
         val doomed = sp.all.keys.filter {
-            it.startsWith("sr_") || it.startsWith("al_") || it.startsWith("onsale_")
+            it.startsWith("sr_") || it.startsWith("al_") ||
+                it.startsWith("onsale_") || it.startsWith("gs_")
         }
         val e = sp.edit()
         doomed.forEach { e.remove(it) }

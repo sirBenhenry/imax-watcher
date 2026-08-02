@@ -79,7 +79,11 @@ class Watcher(private val ctx: Context) {
 
         val cycle = prefs.cycleCount + 1
         prefs.cycleCount = cycle
-        val fullSweep = force || cycle % 4 == 0
+        // Changing the row filter invalidates every cached seat result, since "matching"
+        // now means something different.
+        val rowChanged = prefs.cachedMinRow != prefs.minRow
+        if (rowChanged) prefs.cachedMinRow = prefs.minRow
+        val fullSweep = force || rowChanged || cycle % 4 == 0
 
         val today = LocalDate.now()
         val horizon = if (windowDays > 0) today.plusDays(windowDays.toLong()) else null
@@ -141,25 +145,36 @@ class Watcher(private val ctx: Context) {
                 if (s.isSoldOut || s.seatsRemaining <= 0) {
                     prefs.setSeatsRemaining(s.sessionId, 0)
                     prefs.setAlerted(s.sessionId, emptySet())
+                    prefs.setCachedGoodSeats(s.sessionId, emptyList())
                     screenings.add(result(s, tName, emptyList()))
                     continue
                 }
 
+                // Skip the seat fetch only when the count is unchanged AND we actually
+                // have seat data from a previous look. Without the cache check a session
+                // that rotated out of the budget would be reported as "none matching"
+                // purely because we had nothing to say about it.
                 val previous = prefs.seatsRemaining(s.sessionId)
-                if (!fullSweep && previous == s.seatsRemaining) {
-                    // Unchanged since last look; reuse what we already reported.
-                    val prior = prefs.lastResults.firstOrNull { it.sessionId == s.sessionId }
-                    screenings.add(result(s, tName, prior?.goodSeats ?: emptyList()))
+                val cached = prefs.cachedGoodSeats(s.sessionId)
+                if (!fullSweep && cached != null && previous == s.seatsRemaining) {
+                    screenings.add(result(s, tName, cached))
                     continue
                 }
-                prefs.setSeatsRemaining(s.sessionId, s.seatsRemaining)
 
                 val good = try {
                     requests += 2
                     goodSeats(tid, s.sessionId, minRow)
                 } catch (e: Exception) {
+                    // Report what we last knew rather than claiming nothing matches.
+                    cached?.let { screenings.add(result(s, tName, it)) }
                     continue
                 }
+
+                // Persist only after a successful fetch. Storing the count first meant a
+                // transient failure left the count updated but the seats unknown, so every
+                // later quick pass skipped the retry.
+                prefs.setSeatsRemaining(s.sessionId, s.seatsRemaining)
+                prefs.setCachedGoodSeats(s.sessionId, good.map { it.label })
 
                 val goodIds = good.map { it.id }.toSet()
                 val fresh = good.filter { it.id !in prefs.alerted(s.sessionId) }
@@ -170,19 +185,37 @@ class Watcher(private val ctx: Context) {
             }
         }
 
-        screenings.sortWith(compareBy({ it.date }, { it.time }, { it.theatreName }))
+        // Only part of the search space is visited per cycle, so carry forward screenings
+        // we already know about. Without this the list would drop most of its entries
+        // every cycle and repopulate them a few cycles later.
+        val merged = LinkedHashMap<Long, ScreeningResult>()
+        for (r in prefs.lastResults) {
+            val stillWatched = r.theatreId in venueIds
+            val ld = runCatching { LocalDate.parse(r.date) }.getOrNull()
+            val inWindow = ld != null && !ld.isBefore(today) &&
+                (horizon == null || !ld.isAfter(horizon))
+            if (stillWatched && inWindow) merged[r.sessionId] = r
+        }
+        for (r in screenings) merged[r.sessionId] = r
+
+        val all = merged.values.sortedWith(
+            compareBy({ it.date }, { it.time }, { it.theatreName })
+        )
 
         val note = buildString {
-            if (screenings.isEmpty() && notOnSale > 0) {
+            if (all.isEmpty() && notOnSale > 0) {
                 append("Not on sale yet at $notOnSale of ${venueIds.size} cinemas.")
             } else {
-                append("${screenings.size} screening(s)")
+                append("${all.size} screening(s)")
+                if (pairs.size > PAIR_BUDGET) {
+                    val cycles = (pairs.size + PAIR_BUDGET - 1) / PAIR_BUDGET
+                    append(" · full pass every $cycles cycles")
+                }
                 if (notOnSale > 0) append(" · $notOnSale cinema(s) not on sale yet")
-                if (!fullSweep) append(" · quick pass")
             }
         }
 
-        return ScanResult(seatHits, onSaleHits, screenings, requests, note)
+        return ScanResult(seatHits, onSaleHits, all, requests, note)
     }
 
     private fun result(s: Session, tName: String, good: List<String>) = ScreeningResult(

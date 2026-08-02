@@ -124,6 +124,28 @@ says exactly which dates exist, instead of blindly sweeping a year of calendar.
 Seat layouts are cached on disk permanently — they never change for a given session and
 are by far the largest payload.
 
+### Caching the matching-seat result
+
+Skipping the seat fetch when `seatsRemaining` hasn't moved requires somewhere to keep the
+previous answer. Two rules matter:
+
+- **"Never looked" and "looked, nothing matched" must stay distinct.** Collapsing them
+  makes the list confidently report *"90 free, none matching"* for a screening whose seat
+  map is full of matches — a session that rotated out of the per-cycle budget simply has
+  nothing cached, which is not the same as having no matches.
+- **The seat count is persisted only after a successful fetch.** Storing it first meant a
+  transient network error left the count updated but the seats unknown, so every later
+  quick pass saw "unchanged" and skipped the retry, poisoning that screening until the
+  next full sweep.
+
+A change to the row filter invalidates the whole cache, since "matching" then means
+something different.
+
+Because only `PAIR_BUDGET` pairs are visited per cycle, results from previous cycles are
+carried forward into the screenings list (dropping anything outside the window or at a
+deselected cinema). Otherwise the list would shed most of its entries every cycle and
+repopulate them several cycles later.
+
 Alerts de-duplicate per session: you're told about a seat once, and again only if it goes
 away and comes back.
 
