@@ -145,19 +145,19 @@ class WatchService : Service() {
 
             val goodTotal = result.seatHits.sumOf { it.newSeats.size }
             val status = when {
-                goodTotal > 0 -> "Last check $stamp — $goodTotal new seat(s) found!"
-                result.onSaleHits.isNotEmpty() -> "Last check $stamp — tickets went on sale!"
-                else -> "Last check $stamp — nothing yet (${result.sessionsChecked} screenings)"
+                goodTotal > 0 -> "$goodTotal new seat(s) found!"
+                result.onSaleHits.isNotEmpty() -> "Tickets went on sale!"
+                else -> result.note
             }
 
             prefs.lastCheck = System.currentTimeMillis()
             prefs.lastStatus = status
-            prefs.lastReport = result.report
+            prefs.lastResults = result.screenings
             Notifier.updateStatus(this, status)
             sendBroadcast(Intent(BROADCAST_UPDATED).setPackage(packageName))
         } catch (e: Exception) {
             val stamp = SimpleDateFormat("HH:mm", Locale.CANADA).format(Date())
-            prefs.lastStatus = "Last check $stamp — failed: ${e.message}"
+            prefs.lastStatus = "Check at $stamp failed: ${e.message}"
             Notifier.updateStatus(this, prefs.lastStatus)
             sendBroadcast(Intent(BROADCAST_UPDATED).setPackage(packageName))
         } finally {

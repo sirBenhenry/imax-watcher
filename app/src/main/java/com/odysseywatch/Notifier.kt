@@ -62,8 +62,8 @@ object Notifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val prefs = Prefs(ctx)
-        val title = if (prefs.filmName.isBlank()) "Watching for seats"
-        else "Watching: ${prefs.filmName}"
+        val title = if (prefs.filmName.isBlank()) "Watching IMAX 70mm seats"
+        else "${prefs.filmName} · IMAX 70mm"
         return NotificationCompat.Builder(ctx, CHANNEL_STATUS)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle(title)

@@ -16,7 +16,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OdysseyWatch">
+        android:theme="@style/Theme.ImaxWatcher">
 
         <activity
             android:name=".MainActivity"
@@ -30,6 +30,11 @@
 
         <activity
             android:name=".PickerActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+
+        <activity
+            android:name=".SeatMapActivity"
             android:exported="false"
             android:label="@string/app_name" />
 

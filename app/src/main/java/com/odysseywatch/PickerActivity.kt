@@ -1,8 +1,6 @@
 package com.odysseywatch
 
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
@@ -16,25 +14,23 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
- * One screen serving both pickers: single-select for the film, multi-select grouped by
- * province for the cinemas. Selections are written straight to Prefs, so callers just
- * re-read state in onResume rather than plumbing activity results around.
+ * One screen for both choices: which film (single select) and which of the eight IMAX
+ * 70mm venues (multi select). Selections are written straight to Prefs, so callers just
+ * re-read state in onResume.
  */
 class PickerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_MODE = "mode"
         const val MODE_FILM = "film"
-        const val MODE_THEATRE = "theatre"
+        const val MODE_VENUE = "venue"
 
-        /**
-         * Cineplex venues with an IMAX 70mm projector, found by sweeping all ~150
-         * theatres' showtimes for a "70mm" experience. Offered as a one-tap preset;
-         * everything remains manually selectable in case this drifts.
-         */
-        val IMAX_70MM = listOf(3401, 3403, 1405, 1409, 5130, 7420, 7408, 9406)
+        /** Film discovery costs ~32 requests, so reuse it for a while. */
+        private const val FILM_CACHE_MS = 6 * 60 * 60 * 1000L
     }
 
     private lateinit var b: ActivityPickerBinding
@@ -43,11 +39,8 @@ class PickerActivity : AppCompatActivity() {
 
     private var mode = MODE_FILM
     private var rows = listOf<Row>()
-    private var visible = listOf<Row>()
     private val selected = linkedSetOf<Int>()
-    private var includeComingSoon = false
 
-    /** A list entry: either a province header or a selectable item. */
     private sealed class Row {
         data class Header(val text: String) : Row()
         data class Item(val id: Int, val line1: String, val line2: String) : Row()
@@ -60,38 +53,33 @@ class PickerActivity : AppCompatActivity() {
         prefs = Prefs(this)
         mode = intent.getStringExtra(EXTRA_MODE) ?: MODE_FILM
 
-        if (mode == MODE_THEATRE) {
-            b.title.text = "Choose cinemas"
-            b.search.hint = "Search city or cinema"
+        if (mode == MODE_VENUE) {
+            b.title.text = "IMAX 70mm cinemas"
+            b.hint.text = "The eight Cineplex venues with a 70mm projector"
             b.actions.visibility = View.VISIBLE
             selected.addAll(prefs.theatreIds)
-            b.preset70.setOnClickListener {
-                selected.clear()
-                selected.addAll(IMAX_70MM)
-                adapter.notifyDataSetChanged()
-                updateTitle()
+            b.selectAll.setOnClickListener {
+                if (selected.size == Venues.IDS.size) selected.clear()
+                else { selected.clear(); selected.addAll(Venues.IDS) }
+                adapter.notifyDataSetChanged(); updateTitle()
             }
-            b.clear.setOnClickListener {
-                selected.clear()
-                adapter.notifyDataSetChanged()
-                updateTitle()
-            }
+            b.refresh.visibility = View.GONE
+            rows = venueRows()
+            b.empty.visibility = View.GONE
+            adapter.notifyDataSetChanged()
+            updateTitle()
         } else {
-            b.title.text = "Choose a film"
-            b.search.hint = "Search films"
+            b.title.text = "Films in IMAX 70mm"
+            b.hint.text = "Only films with 70mm showtimes are listed"
             b.actions.visibility = View.VISIBLE
-            b.clear.visibility = View.GONE
-            b.preset70.text = "+ Coming soon"
-            b.preset70.setOnClickListener {
-                includeComingSoon = !includeComingSoon
-                b.preset70.text = if (includeComingSoon) "Bookable only" else "+ Coming soon"
-                load()
-            }
+            b.selectAll.visibility = View.GONE
+            b.refresh.setOnClickListener { loadFilms(force = true) }
+            loadFilms(force = false)
         }
 
         b.list.adapter = adapter
         b.list.setOnItemClickListener { _, _, pos, _ ->
-            val row = visible.getOrNull(pos) as? Row.Item ?: return@setOnItemClickListener
+            val row = rows.getOrNull(pos) as? Row.Item ?: return@setOnItemClickListener
             if (mode == MODE_FILM) {
                 prefs.filmId = row.id
                 prefs.filmName = row.line1
@@ -99,144 +87,78 @@ class PickerActivity : AppCompatActivity() {
                 finish()
             } else {
                 if (!selected.remove(row.id)) selected.add(row.id)
-                adapter.notifyDataSetChanged()
-                updateTitle()
+                adapter.notifyDataSetChanged(); updateTitle()
             }
         }
 
-        b.search.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) = applyFilter(s?.toString() ?: "")
-            override fun beforeTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, a: Int, c: Int, d: Int) = Unit
-        })
-
         b.done.setOnClickListener {
-            if (mode == MODE_THEATRE) save()
+            if (mode == MODE_VENUE) {
+                prefs.theatreIds = if (selected.isEmpty()) Venues.IDS else selected.toList()
+                prefs.clearWatchState()
+            }
             finish()
         }
-
-        load()
     }
 
     private fun updateTitle() {
-        if (mode == MODE_THEATRE) b.title.text = "Choose cinemas (${selected.size})"
+        if (mode == MODE_VENUE) b.title.text = "IMAX 70mm cinemas (${selected.size}/${Venues.IDS.size})"
     }
 
-    private fun save() {
-        val theatres = decodeTheatres(prefs.cachedTheatres)
-        val order = theatres.filter { it.id in selected }
-        prefs.theatreIds = order.map { it.id }
-        prefs.theatreNames = order.associate { it.id to it.name }
-        prefs.clearWatchState()
+    private fun venueRows(): List<Row> {
+        val out = mutableListOf<Row>()
+        Venues.ALL.groupBy { it.province }.toSortedMap().forEach { (prov, list) ->
+            out.add(Row.Header(prov))
+            list.sortedBy { it.city }.forEach { out.add(Row.Item(it.id, it.name, it.city)) }
+        }
+        return out
     }
 
-    private fun load() {
+    private fun loadFilms(force: Boolean) {
+        val fresh = System.currentTimeMillis() - prefs.cachedFilmsAt < FILM_CACHE_MS
+        if (!force && fresh && prefs.cachedFilms.isNotBlank()) {
+            rows = filmRows(decodeFilms(prefs.cachedFilms))
+            b.empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+            adapter.notifyDataSetChanged()
+            return
+        }
+
         b.empty.visibility = View.VISIBLE
-        b.empty.text = "Loading…"
+        b.empty.text = "Scanning all 8 venues for 70mm showtimes…"
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (mode == MODE_THEATRE) {
-                        val list = CineplexApi.theatres()
-                        prefs.cachedTheatres = encodeTheatres(list)
-                        buildTheatreRows(list)
-                    } else {
-                        val bookable = CineplexApi.bookableMovies(prefs.theatreIds)
-                        val soon = if (includeComingSoon) {
-                            val have = bookable.map { it.id }.toSet()
-                            CineplexApi.comingSoonMovies().filter { it.id !in have }
-                        } else emptyList()
-                        prefs.cachedMovies = encodeMovies(bookable + soon)
-                        buildMovieRows(bookable, soon)
-                    }
-                }
+            val res = withContext(Dispatchers.IO) { runCatching { CineplexApi.seventyMmFilms() } }
+            res.onSuccess {
+                prefs.cachedFilms = encodeFilms(it)
+                prefs.cachedFilmsAt = System.currentTimeMillis()
+                rows = filmRows(it)
+                b.empty.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+                if (rows.isEmpty()) b.empty.text = "Nothing is screening in IMAX 70mm right now."
+                adapter.notifyDataSetChanged()
+            }.onFailure {
+                val cached = decodeFilms(prefs.cachedFilms)
+                if (cached.isNotEmpty()) {
+                    rows = filmRows(cached); b.empty.visibility = View.GONE
+                    adapter.notifyDataSetChanged()
+                } else b.empty.text = "Couldn't load: ${it.message}"
             }
-
-            rows = result.getOrElse {
-                // Fall back to whatever was cached so the picker still works offline.
-                val cached = if (mode == MODE_THEATRE)
-                    buildTheatreRows(decodeTheatres(prefs.cachedTheatres))
-                else decodeMovies(prefs.cachedMovies).partition { !it.isComingSoon }
-                    .let { (a, c) -> buildMovieRows(a, c) }
-                if (cached.isEmpty()) {
-                    b.empty.text = "Couldn't load: ${it.message}"
-                    return@launch
-                }
-                cached
-            }
-
-            b.empty.visibility = View.GONE
-            applyFilter(b.search.text?.toString() ?: "")
-            updateTitle()
         }
     }
 
-    private fun buildTheatreRows(list: List<Theatre>): List<Row> {
-        val out = mutableListOf<Row>()
-        list.groupBy { it.province.ifBlank { "—" } }
-            .toSortedMap()
-            .forEach { (prov, items) ->
-                out.add(Row.Header("$prov · ${items.size}"))
-                items.sortedBy { it.city }.forEach {
-                    out.add(Row.Item(it.id, it.name, it.city))
-                }
-            }
-        return out
-    }
-
-    private fun buildMovieRows(bookable: List<Movie>, soon: List<Movie>): List<Row> {
-        val out = mutableListOf<Row>()
-        if (bookable.isNotEmpty()) {
-            out.add(Row.Header("BOOKABLE NOW · ${bookable.size}"))
-            bookable.forEach { out.add(Row.Item(it.id, it.name, it.releaseDate.ifBlank { "—" })) }
-        }
-        if (soon.isNotEmpty()) {
-            out.add(Row.Header("COMING SOON — not on sale yet · ${soon.size}"))
-            soon.forEach { out.add(Row.Item(it.id, it.name, it.releaseDate.ifBlank { "—" })) }
-        }
-        return out
-    }
-
-    private fun applyFilter(q: String) {
-        val query = q.trim().lowercase()
-        visible = if (query.isEmpty()) rows else {
-            // Drop headers whose group has no surviving items.
-            val kept = mutableListOf<Row>()
-            var pendingHeader: Row.Header? = null
-            var wroteUnderHeader = false
-            for (r in rows) {
-                when (r) {
-                    is Row.Header -> { pendingHeader = r; wroteUnderHeader = false }
-                    is Row.Item -> {
-                        if (r.line1.lowercase().contains(query) || r.line2.lowercase().contains(query)) {
-                            if (!wroteUnderHeader) {
-                                pendingHeader?.let { kept.add(it) }
-                                wroteUnderHeader = true
-                            }
-                            kept.add(r)
-                        }
-                    }
-                }
-            }
-            kept
-        }
-        adapter.notifyDataSetChanged()
-        b.empty.visibility = if (visible.isEmpty()) View.VISIBLE else View.GONE
-        if (visible.isEmpty()) b.empty.text = "No matches"
+    private fun filmRows(films: List<Film>): List<Row> = films.map { f ->
+        val where = if (f.venueIds.size == Venues.IDS.size) "All ${Venues.IDS.size} cinemas"
+        else f.venueIds.joinToString(", ") { Venues.shortName(it) }
+        Row.Item(f.id, f.name, where)
     }
 
     private val adapter = object : BaseAdapter() {
-        override fun getCount() = visible.size
-        override fun getItem(position: Int): Any = visible[position]
+        override fun getCount() = rows.size
+        override fun getItem(position: Int): Any = rows[position]
         override fun getItemId(position: Int) = position.toLong()
         override fun getViewTypeCount() = 2
-        override fun getItemViewType(position: Int) =
-            if (visible[position] is Row.Header) 0 else 1
+        override fun getItemViewType(position: Int) = if (rows[position] is Row.Header) 0 else 1
+        override fun isEnabled(position: Int) = rows[position] is Row.Item
 
-        override fun isEnabled(position: Int) = visible[position] is Row.Item
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            return when (val row = visible[position]) {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+            when (val row = rows[position]) {
                 is Row.Header -> {
                     val v = convertView ?: layoutInflater.inflate(R.layout.item_header, parent, false)
                     (v as TextView).text = row.text
@@ -247,16 +169,13 @@ class PickerActivity : AppCompatActivity() {
                     v.findViewById<TextView>(R.id.line1).text = row.line1
                     v.findViewById<TextView>(R.id.line2).text = row.line2
                     val cb = v.findViewById<CheckBox>(R.id.check)
-                    if (mode == MODE_THEATRE) {
+                    if (mode == MODE_VENUE) {
                         cb.visibility = View.VISIBLE
                         cb.isChecked = row.id in selected
-                    } else {
-                        cb.visibility = View.GONE
-                    }
+                    } else cb.visibility = View.GONE
                     v
                 }
             }
-        }
     }
 
     override fun onDestroy() {
@@ -264,3 +183,23 @@ class PickerActivity : AppCompatActivity() {
         super.onDestroy()
     }
 }
+
+fun encodeFilms(list: List<Film>): String {
+    val a = JSONArray()
+    list.forEach {
+        a.put(
+            JSONObject().put("id", it.id).put("name", it.name)
+                .put("venues", JSONArray(it.venueIds))
+        )
+    }
+    return a.toString()
+}
+
+fun decodeFilms(s: String): List<Film> = runCatching {
+    val a = JSONArray(s)
+    (0 until a.length()).map {
+        val o = a.getJSONObject(it)
+        val v = o.optJSONArray("venues") ?: JSONArray()
+        Film(o.optInt("id"), o.optString("name"), (0 until v.length()).map { i -> v.optInt(i) })
+    }
+}.getOrDefault(emptyList())

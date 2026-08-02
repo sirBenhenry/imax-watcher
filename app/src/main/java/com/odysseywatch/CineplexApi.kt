@@ -6,21 +6,13 @@ import java.io.File
 import java.io.PushbackInputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDate
 import java.util.zip.GZIPInputStream
 
-data class Theatre(
+data class Film(
     val id: Int,
     val name: String,
-    val city: String,
-    val province: String
-)
-
-data class Movie(
-    val id: Int,
-    val name: String,
-    val releaseDate: String,   // yyyy-MM-dd, may be blank
-    val posterUrl: String,
-    val isComingSoon: Boolean = false
+    val venueIds: List<Int>
 )
 
 data class Session(
@@ -39,8 +31,17 @@ data class Session(
 data class Seat(
     val id: String,
     val label: String,
-    val row: String,
-    val type: String           // Standard | Wheelchair | Companion
+    val row: String,           // "E"
+    val type: String,          // Standard | Wheelchair | Companion
+    val rowIndex: Int,         // grid y, 0 = closest to screen
+    val col: Int               // grid x
+)
+
+/** Geometry plus grid extents, everything the seat map view needs to draw. */
+data class SeatMap(
+    val rows: Int,
+    val cols: Int,
+    val seats: List<Seat>
 )
 
 /**
@@ -70,9 +71,9 @@ object CineplexApi {
         }
         try {
             if (conn.responseCode !in 200..299) throw RuntimeException("HTTP ${conn.responseCode}")
-            // Cineplex intermittently gzips responses even when it wasn't asked to.
+            // Cineplex intermittently gzips responses even when not asked to, and
             // HttpURLConnection only decompresses transparently when it set the
-            // Accept-Encoding header itself, so decode defensively.
+            // Accept-Encoding header itself. Sniff the magic bytes instead.
             val raw = conn.inputStream
             val stream = if (conn.contentEncoding?.equals("gzip", ignoreCase = true) == true) {
                 GZIPInputStream(raw)
@@ -81,9 +82,8 @@ object CineplexApi {
                     val magic = ByteArray(2)
                     val n = pb.read(magic)
                     if (n > 0) pb.unread(magic, 0, n)
-                    if (n == 2 && magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte()) {
-                        GZIPInputStream(pb)
-                    } else pb
+                    if (n == 2 && magic[0] == 0x1f.toByte() && magic[1] == 0x8b.toByte())
+                        GZIPInputStream(pb) else pb
                 }
             }
             return stream.bufferedReader().use { it.readText() }
@@ -92,99 +92,85 @@ object CineplexApi {
         }
     }
 
-    // ---------------------------------------------------------------- catalogue
+    private fun showtimesRoot(theatreId: Int, date: String): JSONObject? {
+        val raw = get("$CPX/v1/showtimes?language=en&locationId=$theatreId&date=$date")
+        return if (raw.trimStart().startsWith("[")) {
+            val arr = JSONArray(raw)
+            if (arr.length() == 0) null else arr.getJSONObject(0)
+        } else JSONObject(raw)
+    }
 
-    /** Every Cineplex theatre in Canada (about 150). */
-    fun theatres(): List<Theatre> {
-        val root = JSONObject(get("$CPX/v1/theatres?language=en&skip=0&take=1000"))
-        val out = LinkedHashMap<Int, Theatre>()
-        for (bucket in listOf("favouriteTheatres", "nearbyTheatres", "otherTheatres")) {
-            val arr = root.optJSONArray(bucket) ?: continue
-            for (i in 0 until arr.length()) {
-                val t = arr.getJSONObject(i)
-                val loc = t.optJSONObject("location")
-                val id = t.optInt("theatreId")
-                if (id == 0) continue
-                out[id] = Theatre(
-                    id = id,
-                    name = t.optString("theatreName"),
-                    city = loc?.optString("city") ?: "",
-                    province = loc?.optString("provinceCode") ?: ""
-                )
+    /** experienceTypes is sometimes a string, sometimes an array of strings. */
+    private fun experienceLabel(exp: JSONObject): String {
+        exp.optJSONArray("experienceTypes")?.let { arr ->
+            return (0 until arr.length()).joinToString(" ") { arr.optString(it) }
+        }
+        return exp.optString("experienceTypes")
+    }
+
+    private fun isSeventy(label: String) =
+        label.contains(Format.MATCH, ignoreCase = true)
+
+    // ---------------------------------------------------------------- film discovery
+
+    /**
+     * Films actually screening in IMAX 70mm, with the venues showing each.
+     *
+     * There is no server-side way to ask this: `/v1/movies/bookable` accepts an
+     * `experiences` parameter but ignores it (84 films returned either way), and
+     * `hasShowtimes` on the raw catalogue is unreliable. So the list is derived by
+     * sampling a few dates of showtimes at each 70mm venue and keeping films that
+     * appear with a 70mm experience. In practice this is a very short list — two films
+     * at the time of writing — which is the whole point: the picker should offer what
+     * you can actually see in 70mm, not 250 catalogue entries.
+     *
+     * Costs ~32 requests, so results are cached by the caller.
+     */
+    fun seventyMmFilms(): List<Film> {
+        val today = LocalDate.now()
+        val samples = listOf(0L, 10L, 40L, 140L).map { today.plusDays(it).toString() }
+        val found = LinkedHashMap<Int, Pair<String, MutableSet<Int>>>()
+        var ok = 0
+        var failed = 0
+
+        for (venue in Venues.ALL) {
+            for (date in samples) {
+                val root = runCatching { showtimesRoot(venue.id, date) }
+                    .onSuccess { ok++ }
+                    .onFailure { failed++ }
+                    .getOrNull() ?: continue
+                val dates = root.optJSONArray("dates") ?: continue
+                for (di in 0 until dates.length()) {
+                    val movies = dates.getJSONObject(di).optJSONArray("movies") ?: continue
+                    for (mi in 0 until movies.length()) {
+                        val movie = movies.getJSONObject(mi)
+                        val exps = movie.optJSONArray("experiences") ?: continue
+                        for (ei in 0 until exps.length()) {
+                            if (!isSeventy(experienceLabel(exps.getJSONObject(ei)))) continue
+                            val id = movie.optInt("id")
+                            if (id == 0) continue
+                            found.getOrPut(id) { movie.optString("name") to mutableSetOf() }
+                                .second.add(venue.id)
+                        }
+                    }
+                }
             }
         }
-        return out.values.sortedWith(compareBy({ it.province }, { it.city }, { it.name }))
+        // Never let a dead network read as "nothing is screening in 70mm" — that is a
+        // very different message to the user, and a wrong one.
+        if (ok == 0) throw java.io.IOException("couldn't reach Cineplex ($failed requests failed)")
+        return found.map { (id, v) -> Film(id, v.first, v.second.sorted()) }
+            .sortedBy { it.name.lowercase() }
     }
 
-    private fun parseMovies(arr: JSONArray?): List<Movie> {
-        if (arr == null) return emptyList()
-        val out = mutableListOf<Movie>()
-        for (i in 0 until arr.length()) {
-            val m = arr.getJSONObject(i)
-            val id = m.optInt("id")
-            if (id == 0) continue
-            val rel = m.optString("releaseDate")
-            out.add(
-                Movie(
-                    id = id,
-                    name = m.optString("name"),
-                    releaseDate = if (rel.length >= 10) rel.substring(0, 10) else "",
-                    posterUrl = m.optString("smallPosterImageUrl"),
-                    isComingSoon = m.optBoolean("isComingSoon", false)
-                )
-            )
-        }
-        return out.sortedBy { it.name.lowercase() }
-    }
+    // ---------------------------------------------------------------- showtimes
 
     /**
-     * Films you can actually buy a ticket for.
-     *
-     * The raw catalogue (`/v1/movies`) is ~250 titles and includes a long tail with no
-     * showtimes anywhere, which made the picker read as full of films that aren't
-     * playing. `/v1/movies/bookable` is the honest list: ~86 nationally, and narrower
-     * still per cinema. Note `hasShowtimes` on the raw catalogue is NOT a usable
-     * substitute — Dune: Part 3 reports false while genuinely being bookable.
-     *
-     * When cinemas are selected we union their per-cinema lists, so the picker only
-     * offers films you could actually see at one of your venues.
-     */
-    fun bookableMovies(theatreIds: List<Int>): List<Movie> {
-        val out = LinkedHashMap<Int, Movie>()
-        // Beyond a handful of cinemas the per-venue fan-out costs more than it's worth.
-        if (theatreIds.isEmpty() || theatreIds.size > 12) {
-            parseMovies(JSONArray(get("$CPX/v1/movies/bookable?language=en"))).forEach { out[it.id] = it }
-        } else {
-            for (t in theatreIds) {
-                runCatching {
-                    parseMovies(JSONArray(get("$CPX/v1/movies/bookable?language=en&locationId=$t")))
-                }.getOrDefault(emptyList()).forEach { out[it.id] = it }
-            }
-        }
-        return out.values.sortedBy { it.name.lowercase() }
-    }
-
-    /**
-     * Announced films with no showtimes on sale anywhere yet. Offered behind a toggle so
-     * a watch can be armed in advance — the on-sale alert is the whole point for a film
-     * that is still months out.
-     */
-    fun comingSoonMovies(): List<Movie> {
-        val root = JSONObject(get("$CPX/v1/movies?language=en&skip=0&take=500&showtimeStatus=0"))
-        return parseMovies(root.optJSONArray("items")).filter { it.isComingSoon }
-    }
-
-    /**
-     * Dates on which [filmId] is actually bookable at [theatreId].
-     *
-     * This is the cheap pivot the whole poll loop is built on: one request tells us
-     * exactly which dates are worth fetching showtimes for, instead of blindly
-     * sweeping a year of calendar. An empty list means the film is not on sale here
-     * yet — which is itself the signal for the "tickets went on sale" alert.
+     * Dates on which [filmId] is bookable at [theatreId]. One cheap request that says
+     * exactly which dates are worth fetching showtimes for. Empty means not on sale yet.
      */
     fun bookableDates(theatreId: Int, filmId: Int): List<String> {
-        val raw = get("$CPX/v1/dates/bookable?language=en&locationId=$theatreId&filmId=$filmId")
-        val arr = JSONArray(raw)
+        val arr = JSONArray(get("$CPX/v1/dates/bookable?language=en&locationId=$theatreId&filmId=$filmId"))
         return (0 until arr.length())
             .map { arr.optString(it) }
             .filter { it.length >= 10 }
@@ -192,16 +178,9 @@ object CineplexApi {
             .sorted()
     }
 
-    // ---------------------------------------------------------------- showtimes
-
-    /** Sessions of [filmId] at [theatreId] on [date]. */
+    /** IMAX 70mm sessions of [filmId] at [theatreId] on [date]. */
     fun sessionsOn(theatreId: Int, date: String, filmId: Int): List<Session> {
-        val raw = get("$CPX/v1/showtimes?language=en&locationId=$theatreId&date=$date")
-        val root: JSONObject = if (raw.trimStart().startsWith("[")) {
-            val arr = JSONArray(raw)
-            if (arr.length() == 0) return emptyList() else arr.getJSONObject(0)
-        } else JSONObject(raw)
-
+        val root = showtimesRoot(theatreId, date) ?: return emptyList()
         val out = mutableListOf<Session>()
         val dates = root.optJSONArray("dates") ?: return emptyList()
         for (di in 0 until dates.length()) {
@@ -209,11 +188,11 @@ object CineplexApi {
             for (mi in 0 until movies.length()) {
                 val movie = movies.getJSONObject(mi)
                 if (movie.optInt("id") != filmId) continue
-
                 val experiences = movie.optJSONArray("experiences") ?: continue
                 for (ei in 0 until experiences.length()) {
                     val exp = experiences.getJSONObject(ei)
                     val label = experienceLabel(exp)
+                    if (!isSeventy(label)) continue          // 70mm only, always
                     val sessions = exp.optJSONArray("sessions") ?: continue
                     for (si in 0 until sessions.length()) {
                         val s = sessions.getJSONObject(si)
@@ -241,18 +220,10 @@ object CineplexApi {
         return out
     }
 
-    /** experienceTypes is sometimes a string, sometimes an array of strings. */
-    private fun experienceLabel(exp: JSONObject): String {
-        exp.optJSONArray("experienceTypes")?.let { arr ->
-            return (0 until arr.length()).joinToString(" ") { arr.optString(it) }
-        }
-        return exp.optString("experienceTypes")
-    }
-
     // ---------------------------------------------------------------- seats
 
     /** Seat geometry. Static per session, so cached on disk — the largest payload here. */
-    fun seatLayout(theatreId: Int, sessionId: Long, cacheDir: File): List<Seat> {
+    fun seatLayout(theatreId: Int, sessionId: Long, cacheDir: File): SeatMap {
         val cache = File(cacheDir, "layout_$sessionId.json")
         val body = if (cache.exists() && cache.length() > 0) cache.readText()
         else get("$TIX/v1/theatre/$theatreId/showtime/$sessionId/seat-layout")
@@ -260,28 +231,37 @@ object CineplexApi {
 
         val root = JSONObject(body)
         val seats = mutableListOf<Seat>()
+        var maxRow = root.optInt("totalRows", 0)
+        var maxCol = root.optInt("totalColumns", 0)
+
         for (key in root.keys()) {
             val area = root.opt(key) as? JSONObject ?: continue
             val rows = area.optJSONArray("rows") ?: continue
             for (ri in 0 until rows.length()) {
                 val row = rows.getJSONObject(ri)
                 val rowLabel = row.optString("label")
+                val rowIndex = row.optInt("number", ri)
                 if (rowLabel.isBlank()) continue          // spacer rows hold no seats
                 val rowSeats = row.optJSONArray("seats") ?: continue
                 for (si in 0 until rowSeats.length()) {
                     val s = rowSeats.getJSONObject(si)
+                    val col = s.optInt("column", si)
+                    if (col + 1 > maxCol) maxCol = col + 1
+                    if (rowIndex + 1 > maxRow) maxRow = rowIndex + 1
                     seats.add(
                         Seat(
                             id = s.optString("id"),
                             label = s.optString("label"),
                             row = rowLabel,
-                            type = s.optString("type")
+                            type = s.optString("type"),
+                            rowIndex = rowIndex,
+                            col = col
                         )
                     )
                 }
             }
         }
-        return seats
+        return SeatMap(maxRow, maxCol, seats)
     }
 
     /** seatId -> "Available" | "Occupied" | "Broken". */

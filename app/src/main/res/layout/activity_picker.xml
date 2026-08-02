@@ -2,56 +2,55 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#101014">
+    android:background="#101014"
+    android:orientation="vertical">
 
     <TextView
         android:id="@+id/title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="18dp"
         android:text="Choose"
         android:textColor="#FFFFFF"
         android:textSize="20sp"
         android:textStyle="bold" />
 
-    <EditText
-        android:id="@+id/search"
+    <TextView
+        android:id="@+id/hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:background="#1B1B22"
-        android:hint="Search"
-        android:importantForAutofill="no"
-        android:inputType="text"
-        android:padding="12dp"
-        android:textColor="#F2F2F7"
-        android:textColorHint="#6E6E80" />
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="12dp"
+        android:textColor="#8A8A99"
+        android:textSize="13sp" />
 
     <LinearLayout
         android:id="@+id/actions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="8dp"
         android:visibility="gone">
 
         <Button
-            android:id="@+id/preset70"
+            android:id="@+id/selectAll"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="IMAX 70mm"
+            android:text="Select all"
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/clear"
+            android:id="@+id/refresh"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Clear"
+            android:text="Refresh list"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -59,7 +58,7 @@
         android:id="@+id/empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
+        android:padding="20dp"
         android:text="Loading…"
         android:textColor="#A8A8B8" />
 
@@ -76,6 +75,6 @@
         android:id="@+id/done"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
+        android:layout_margin="14dp"
         android:text="Done" />
 </LinearLayout>

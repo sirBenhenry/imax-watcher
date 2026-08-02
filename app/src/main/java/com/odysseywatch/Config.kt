@@ -3,15 +3,54 @@ package com.odysseywatch
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONObject
 
-/** Experience presets offered in the UI. Matched as a case-insensitive substring. */
-object Experiences {
-    const val ANY = "Any format"
-    val PRESETS = listOf(ANY, "IMAX 70mm", "IMAX", "UltraAVX", "D-BOX", "4DX", "ScreenX", "VIP")
-
-    fun matches(preset: String, actual: String): Boolean =
-        preset == ANY || actual.contains(preset, ignoreCase = true)
+/**
+ * This app does one thing: IMAX 70mm. The format is not configurable, so everything
+ * downstream — which cinemas exist, which films are offered — narrows to that.
+ */
+object Format {
+    /** Matched case-insensitively against a session's experienceTypes. */
+    const val MATCH = "70mm"
+    const val LABEL = "IMAX 70mm"
 }
+
+/**
+ * The eight Cineplex venues with an IMAX 70mm projector, found by sweeping all ~150
+ * theatres' showtimes for a 70mm experience. Canada's ninth IMAX 70mm screen is
+ * Toronto's Cinesphere, which is not a Cineplex venue and so is unreachable here.
+ */
+object Venues {
+    data class V(val id: Int, val name: String, val city: String, val province: String)
+
+    val ALL = listOf(
+        V(3401, "Scotiabank Theatre Chinook", "Calgary", "AB"),
+        V(3403, "Scotiabank Theatre Edmonton", "Edmonton", "AB"),
+        V(1405, "Cineplex Cinemas Langley", "Langley", "BC"),
+        V(1409, "SilverCity Riverport", "Richmond", "BC"),
+        V(5130, "Scotiabank Theatre Halifax", "Halifax", "NS"),
+        V(7420, "Cineplex Mississauga Square One", "Mississauga", "ON"),
+        V(7408, "Cineplex Cinemas Vaughan", "Vaughan", "ON"),
+        V(9406, "Cinéma Banque Scotia Montréal", "Montréal", "QC")
+    )
+
+    val IDS = ALL.map { it.id }
+    fun name(id: Int) = ALL.firstOrNull { it.id == id }?.name ?: "Theatre $id"
+    fun shortName(id: Int) = ALL.firstOrNull { it.id == id }?.city ?: "$id"
+}
+
+/** One screening from the most recent scan, kept so the UI can show and re-open it. */
+data class ScreeningResult(
+    val theatreId: Int,
+    val theatreName: String,
+    val sessionId: Long,
+    val date: String,
+    val time: String,
+    val seatsRemaining: Int,
+    val isSoldOut: Boolean,
+    val goodSeats: List<String>,
+    val deeplinkUrl: String
+)
 
 class Prefs(ctx: Context) {
     private val sp: SharedPreferences =
@@ -27,28 +66,24 @@ class Prefs(ctx: Context) {
         get() = sp.getString("film_name", "") ?: ""
         set(v) = sp.edit().putString("film_name", v).apply()
 
-    /** Selected theatre ids, in display order. */
+    /**
+     * Selected venue ids, always a subset of [Venues.IDS].
+     *
+     * Filtered rather than trusted: an earlier version let any of Cineplex's ~150
+     * theatres be picked, so an upgraded install can hold ids that have no 70mm
+     * projector. Anything unrecognised is dropped, and an empty result means all.
+     */
     var theatreIds: List<Int>
-        get() = decodeInts(sp.getString("theatre_ids", "") ?: "")
-        set(v) = sp.edit().putString("theatre_ids", v.joinToString(",")).apply()
-
-    var theatreNames: Map<Int, String>
         get() {
-            val raw = sp.getString("theatre_names", "{}") ?: "{}"
-            return runCatching {
-                val o = org.json.JSONObject(raw)
-                o.keys().asSequence().associate { it.toInt() to o.optString(it) }
-            }.getOrDefault(emptyMap())
+            val raw = sp.getString("theatre_ids", null) ?: return Venues.IDS
+            val parsed = raw.split(",")
+                .mapNotNull { it.trim().toIntOrNull() }
+                .filter { it in Venues.IDS }
+            return if (parsed.isEmpty()) Venues.IDS else parsed
         }
-        set(v) {
-            val o = org.json.JSONObject()
-            v.forEach { (k, name) -> o.put(k.toString(), name) }
-            sp.edit().putString("theatre_names", o.toString()).apply()
-        }
-
-    var experience: String
-        get() = sp.getString("experience", "IMAX 70mm") ?: "IMAX 70mm"
-        set(v) = sp.edit().putString("experience", v).apply()
+        set(v) = sp.edit()
+            .putString("theatre_ids", v.filter { it in Venues.IDS }.joinToString(","))
+            .apply()
 
     // ---------------------------------------------------------------- filters
 
@@ -57,17 +92,15 @@ class Prefs(ctx: Context) {
         get() = sp.getString("min_row", "C") ?: "C"
         set(v) = sp.edit().putString("min_row", v).apply()
 
-    /** Earliest acceptable start time, minutes past midnight. */
     var earliestMinutes: Int
         get() = sp.getInt("earliest", 0)
         set(v) = sp.edit().putInt("earliest", v).apply()
 
-    /** Latest acceptable start time, minutes past midnight. */
     var latestMinutes: Int
         get() = sp.getInt("latest", 24 * 60 - 1)
         set(v) = sp.edit().putInt("latest", v).apply()
 
-    /** Days ahead to consider. 0 means no limit — the whole bookable horizon. */
+    /** Days ahead to consider. 0 means no limit. */
     var windowDays: Int
         get() = sp.getInt("window_days", 0)
         set(v) = sp.edit().putInt("window_days", v).apply()
@@ -94,18 +127,49 @@ class Prefs(ctx: Context) {
         get() = sp.getString("last_status", "Not started yet") ?: ""
         set(v) = sp.edit().putString("last_status", v).apply()
 
-    var lastReport: String
-        get() = sp.getString("last_report", "") ?: ""
-        set(v) = sp.edit().putString("last_report", v).apply()
-
     var cycleCount: Int
         get() = sp.getInt("cycle", 0)
         set(v) = sp.edit().putInt("cycle", v).apply()
 
-    /** Rotating offset so an unbounded date range still gets covered over several cycles. */
     var scanOffset: Int
         get() = sp.getInt("scan_offset", 0)
         set(v) = sp.edit().putInt("scan_offset", v).apply()
+
+    // ---------------------------------------------------------------- last scan
+
+    var lastResults: List<ScreeningResult>
+        get() = runCatching {
+            val a = JSONArray(sp.getString("results", "[]"))
+            (0 until a.length()).map {
+                val o = a.getJSONObject(it)
+                val seats = o.optJSONArray("goodSeats") ?: JSONArray()
+                ScreeningResult(
+                    theatreId = o.optInt("theatreId"),
+                    theatreName = o.optString("theatreName"),
+                    sessionId = o.optLong("sessionId"),
+                    date = o.optString("date"),
+                    time = o.optString("time"),
+                    seatsRemaining = o.optInt("seatsRemaining"),
+                    isSoldOut = o.optBoolean("isSoldOut"),
+                    goodSeats = (0 until seats.length()).map { i -> seats.optString(i) },
+                    deeplinkUrl = o.optString("deeplinkUrl")
+                )
+            }
+        }.getOrDefault(emptyList())
+        set(v) {
+            val a = JSONArray()
+            v.forEach {
+                a.put(
+                    JSONObject()
+                        .put("theatreId", it.theatreId).put("theatreName", it.theatreName)
+                        .put("sessionId", it.sessionId).put("date", it.date).put("time", it.time)
+                        .put("seatsRemaining", it.seatsRemaining).put("isSoldOut", it.isSoldOut)
+                        .put("goodSeats", JSONArray(it.goodSeats))
+                        .put("deeplinkUrl", it.deeplinkUrl)
+                )
+            }
+            sp.edit().putString("results", a.toString()).apply()
+        }
 
     // ---------------------------------------------------------------- per-session state
 
@@ -115,7 +179,6 @@ class Prefs(ctx: Context) {
     fun alerted(sessionId: Long): Set<String> = sp.getStringSet("al_$sessionId", emptySet()) ?: emptySet()
     fun setAlerted(sessionId: Long, seats: Set<String>) = sp.edit().putStringSet("al_$sessionId", seats).apply()
 
-    /** Whether this film was already on sale at this theatre last time we looked. */
     fun wasOnSale(theatreId: Int, filmId: Int): Boolean =
         sp.getBoolean("onsale_${theatreId}_$filmId", false)
 
@@ -129,66 +192,18 @@ class Prefs(ctx: Context) {
         }
         val e = sp.edit()
         doomed.forEach { e.remove(it) }
-        e.putInt("scan_offset", 0)
+        e.putInt("scan_offset", 0).putString("results", "[]")
         e.apply()
     }
 
-    // ---------------------------------------------------------------- cached catalogue
+    /** Cached list of films currently screening in IMAX 70mm. */
+    var cachedFilms: String
+        get() = sp.getString("cache_films", "") ?: ""
+        set(v) = sp.edit().putString("cache_films", v).apply()
 
-    var cachedTheatres: String
-        get() = sp.getString("cache_theatres", "") ?: ""
-        set(v) = sp.edit().putString("cache_theatres", v).apply()
-
-    var cachedMovies: String
-        get() = sp.getString("cache_movies", "") ?: ""
-        set(v) = sp.edit().putString("cache_movies", v).apply()
-
-    private fun decodeInts(s: String): List<Int> =
-        s.split(",").mapNotNull { it.trim().toIntOrNull() }
+    var cachedFilmsAt: Long
+        get() = sp.getLong("cache_films_at", 0L)
+        set(v) = sp.edit().putLong("cache_films_at", v).apply()
 }
 
 fun minutesToHhMm(m: Int): String = "%02d:%02d".format(m / 60, m % 60)
-
-fun encodeTheatres(list: List<Theatre>): String {
-    val a = JSONArray()
-    list.forEach {
-        a.put(
-            org.json.JSONObject()
-                .put("id", it.id).put("name", it.name)
-                .put("city", it.city).put("province", it.province)
-        )
-    }
-    return a.toString()
-}
-
-fun decodeTheatres(s: String): List<Theatre> = runCatching {
-    val a = JSONArray(s)
-    (0 until a.length()).map {
-        val o = a.getJSONObject(it)
-        Theatre(o.optInt("id"), o.optString("name"), o.optString("city"), o.optString("province"))
-    }
-}.getOrDefault(emptyList())
-
-fun encodeMovies(list: List<Movie>): String {
-    val a = JSONArray()
-    list.forEach {
-        a.put(
-            org.json.JSONObject()
-                .put("id", it.id).put("name", it.name)
-                .put("releaseDate", it.releaseDate).put("posterUrl", it.posterUrl)
-                .put("isComingSoon", it.isComingSoon)
-        )
-    }
-    return a.toString()
-}
-
-fun decodeMovies(s: String): List<Movie> = runCatching {
-    val a = JSONArray(s)
-    (0 until a.length()).map {
-        val o = a.getJSONObject(it)
-        Movie(
-            o.optInt("id"), o.optString("name"), o.optString("releaseDate"),
-            o.optString("posterUrl"), o.optBoolean("isComingSoon", false)
-        )
-    }
-}.getOrDefault(emptyList())

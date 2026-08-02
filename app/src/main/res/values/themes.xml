@@ -6,7 +6,7 @@
       colours to draw on top of a dark background — spinners and dropdowns rendered
       effectively invisible. Pinning the dark theme keeps text and background in sync.
     -->
-    <style name="Theme.OdysseyWatch" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.ImaxWatcher" parent="Theme.AppCompat.NoActionBar">
         <item name="colorPrimary">#C8963E</item>
         <item name="colorPrimaryDark">#0B0B0E</item>
         <item name="colorAccent">#C8963E</item>

@@ -9,95 +9,163 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="28dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Odyssey Watch"
+            android:letterSpacing="0.02"
+            android:text="IMAX Watcher"
             android:textColor="#FFFFFF"
-            android:textSize="22sp"
+            android:textSize="26sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Cineplex seat watcher"
-            android:textColor="#8A8A99"
+            android:layout_marginTop="1dp"
+            android:text="IMAX 70mm · Cineplex Canada"
+            android:textColor="#C8963E"
             android:textSize="13sp" />
 
-        <TextView
-            android:id="@+id/status"
+        <!-- status -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:background="#1B1B22"
-            android:padding="14dp"
-            android:text="Not started yet"
-            android:textColor="#E6E6F0"
-            android:textSize="15sp" />
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/statusHead"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Stopped"
+                android:textColor="#F2F2F7"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/statusBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Not started yet"
+                android:textColor="#A8A8B8"
+                android:textSize="13sp" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/toggle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="12dp"
             android:text="Start watching" />
 
         <Button
             android:id="@+id/checkNow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="Check once now" />
 
-        <!-- ============================ WHAT ============================ -->
+        <!-- screenings -->
+        <TextView
+            android:id="@+id/screeningsLabel"
+            style="@style/SectionLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SCREENINGS" />
+
+        <TextView
+            android:id="@+id/screeningsEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
+            android:text="No scan yet — tap “Check once now”."
+            android:textColor="#8A8A99"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/screenings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <!-- what -->
         <TextView
             style="@style/SectionLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="WHAT TO WATCH" />
+            android:text="WATCHING" />
 
-        <Button
-            android:id="@+id/pickFilm"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Choose film" />
+            android:layout_marginTop="8dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="6dp">
 
-        <TextView
-            android:id="@+id/filmLabel"
-            style="@style/ValueLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="No film selected" />
+            <LinearLayout
+                android:id="@+id/pickFilm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-        <Button
-            android:id="@+id/pickTheatres"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="Choose cinemas" />
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="Film" />
 
-        <TextView
-            android:id="@+id/theatreLabel"
-            style="@style/ValueLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="No cinemas selected" />
+                <TextView
+                    android:id="@+id/filmLabel"
+                    style="@style/ValueLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Tap to choose" />
+            </LinearLayout>
 
-        <TextView
-            style="@style/FieldLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Format" />
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="12dp"
+                android:background="#26262F" />
 
-        <Spinner
-            android:id="@+id/experience"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            <LinearLayout
+                android:id="@+id/pickVenues"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-        <!-- ============================ FILTERS ============================ -->
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:text="Cinemas" />
+
+                <TextView
+                    android:id="@+id/venueLabel"
+                    style="@style/ValueLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="All 8" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- filters -->
         <TextView
             style="@style/SectionLabel"
             android:layout_width="match_parent"
@@ -115,33 +183,54 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="From" />
+
+                <Spinner
+                    android:id="@+id/earliest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Until" />
+
+                <Spinner
+                    android:id="@+id/latest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             style="@style/FieldLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Earliest start time" />
-
-        <Spinner
-            android:id="@+id/earliest"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            style="@style/FieldLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Latest start time" />
-
-        <Spinner
-            android:id="@+id/latest"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            style="@style/FieldLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="How far ahead to look" />
+            android:text="How far ahead" />
 
         <Spinner
             android:id="@+id/window"
@@ -156,7 +245,7 @@
             android:text="Alert when tickets first go on sale"
             android:textColor="#E6E6F0" />
 
-        <!-- ============================ RUNTIME ============================ -->
+        <!-- runtime -->
         <TextView
             style="@style/SectionLabel"
             android:layout_width="match_parent"
@@ -180,24 +269,5 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
             android:text="Disable battery optimisation" />
-
-        <TextView
-            style="@style/SectionLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="LAST SCAN" />
-
-        <TextView
-            android:id="@+id/report"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="24dp"
-            android:background="#1B1B22"
-            android:fontFamily="monospace"
-            android:padding="12dp"
-            android:text="—"
-            android:textColor="#B9B9C6"
-            android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>
